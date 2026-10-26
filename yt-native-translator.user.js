@@ -8,6 +8,7 @@
 // @downloadURL  https://raw.githubusercontent.com/Noctyn/yt-native-translator/main/yt-native-translator.user.js
 // @version      0.1.3
 // @description  复用 YouTube 网页端自带的评论翻译接口，免第三方 API Key 与自建代理：悬停即译、滚动自动翻译、译文/双语/原文一键切换，本地缓存 + 三款外观。
+// @description:en Translate YouTube comments using YouTube native translation service without third-party API keys. Supports hover/scroll auto-translation, bilingual view, and local cache.
 // @author       Noctyn
 // @match        https://www.youtube.com/watch*
 // @match        https://www.youtube.com/live/*

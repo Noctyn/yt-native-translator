@@ -6,9 +6,10 @@
 
 ## 安装
 
-使用前需在浏览器安装 [Tampermonkey](https://www.tampermonkey.net/) 或 Violentmonkey 扩展：
+使用前需在浏览器安装 [Tampermonkey](https://www.tampermonkey.net/) 或 Violentmonkey 扩展，通过以下任一途径安装：
 
-👉 **[点击直接安装](https://raw.githubusercontent.com/Noctyn/yt-native-translator/main/yt-native-translator.user.js)**
+- **[Greasy Fork 安装](https://greasyfork.org/zh-CN/scripts/602312)**（推荐）
+- **[GitHub 直接安装](https://raw.githubusercontent.com/Noctyn/yt-native-translator/main/yt-native-translator.user.js)**
 
 脚本只申请 5 个 `GM_*` 权限（读写存储、注入样式、注册菜单、跨标签同步），网络请求全部走 `www.youtube.com` 同源 `fetch`，因此不需要 `@connect`，也不会把数据发给第三方。样式优先用 `GM_addStyle` / 构造样式表（`adoptedStyleSheets`）注入，以避开 YouTube 的 CSP。
 
@@ -28,6 +29,17 @@
 - **缓存与限流**：本地 LRU 缓存（1000 条 / 3 天，可持久化，关页面前同步落盘）、并发 2 的队列（按离视口中线距离优先）、429/401 分级熔断与静默重试。
 - **接口容错**：400/404/405 时先用兜底 `clientVersion` + 兼容上下文自动重试一次，不会因为单条失败全局停摆；连续 3 条失败才暂停 2 分钟（提示原因），点任意「重试」立即解除。
 - **快捷键**：`Alt+Shift+S` 打开设置、`T` 切换显示方式、`A` 翻译可视评论、`P` 开关自动翻译、`C` 清空缓存。
+
+## 界面预览
+
+### 色条引述（默认）
+![色条引述](https://raw.githubusercontent.com/Noctyn/yt-native-translator/main/assets/style-quote.png)
+
+### 轻盈卡片
+![轻盈卡片](https://raw.githubusercontent.com/Noctyn/yt-native-translator/main/assets/style-card.png)
+
+### 极简竖线
+![极简竖线](https://raw.githubusercontent.com/Noctyn/yt-native-translator/main/assets/style-minimal.png)
 
 ## 性能
 
