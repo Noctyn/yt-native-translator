@@ -20,7 +20,7 @@
 // @grant        GM_addValueChangeListener
 // @run-at       document-idle
 // @noframes
-// @license      MIT
+// ==/UserScript==
 
 (function () {
   'use strict';
