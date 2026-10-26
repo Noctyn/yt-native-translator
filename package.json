@@ -1,0 +1,18 @@
+{
+  "name": "yt-native-translator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "YouTube 评论区原生翻译油猴脚本，以及用于逆向/验证的 cURL + patchright 探针",
+  "type": "module",
+  "scripts": {
+    "watch": "node probe/capture3.mjs",
+    "verify": "node probe/verify.mjs",
+    "theme": "node probe/themetest.mjs",
+    "api:translate": "node probe/translate2.mjs",
+    "api:limits": "node probe/limits.mjs",
+    "api:burst": "node probe/burst.mjs"
+  },
+  "dependencies": {
+    "patchright": "^1.64.2"
+  }
+}

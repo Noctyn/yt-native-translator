@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 抓包与验证产物（会话 Cookie、continuation token、页面快照、截图）一律不入库
+probe/*
+!probe/*.mjs
+probe/profile8/
+probe/profile9/
