@@ -82,7 +82,7 @@
   const DEFAULTS = Object.freeze({
     targetLang: 'auto',
     mode: 'bilingual',
-    style: 'quote',
+    style: 'soft',
     motion: 'medium',
     hover: true,
     hoverDelay: 200,
@@ -202,7 +202,8 @@
     const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
     c.targetLang = pick(c.targetLang, LANGS.map((l) => l[0]), 'auto');
     c.mode = pick(c.mode, VIEWS, 'bilingual');
-    c.style = pick(c.style, ['quote', 'card', 'minimal'], 'quote');
+    const STYLE_ALIAS = { quote: 'soft', card: 'soft', minimal: 'plain' }; // 兼容旧配置
+    c.style = pick(STYLE_ALIAS[c.style] || c.style, ['soft', 'outline', 'plain'], 'soft');
     c.motion = pick(c.motion, ['off', 'medium', 'full'], 'medium');
     c.modifier = pick(c.modifier, ['none', 'alt', 'ctrl', 'shift'], 'none');
     const delay = Number(c.hoverDelay);
@@ -658,7 +659,7 @@
       h('div', { class: 'ytn-skel', 'aria-hidden': 'true' }),
       h('div', { class: 'ytn-text' }),
     ]);
-    box.append(h('div', { class: 'ytn-body-wrap' }, body), note);
+    box.append(note, h('div', { class: 'ytn-body-wrap' }, body));
     return box;
   }
 
@@ -1368,7 +1369,7 @@
       pv.el,
       sec('评论里的译文'),
       row('显示方式', buildSeg(VIEWS.map((v) => [v, VIEW_LABEL[v]]), config.mode, (v) => commit({ mode: v })), '双语：原文在上、译文在下。也可以在每条译文下单独切换'),
-      row('外观风格', buildSeg([['quote', '色条引述'], ['card', '轻盈卡片'], ['minimal', '极简竖线']], config.style, (v) => commit({ style: v }))),
+      row('外观风格', buildSeg([['soft', '柔和卡片'], ['outline', '细描边'], ['plain', '无框']], config.style, (v) => commit({ style: v }))),
       row('动画', buildSeg([['off', '关闭'], ['medium', '适中'], ['full', '丰富']], config.motion, (v) => commit({ motion: v })), '系统开启「减少动态效果」时自动关闭'),
       sec('评论区'),
       row('显示评论区工具栏', buildSwitch(config.showToolbar, (v) => commit({ showToolbar: v })), '在评论标题下放置自动翻译、显示方式和设置入口'),
@@ -1503,6 +1504,7 @@
   --ytn-t:160ms;
   --ytn-dy:-3px;
   --ytn-ease:cubic-bezier(.2,0,0,1);
+  --ytn-tint:color-mix(in srgb,var(--ytn-accent) 7%,transparent);
 }
 html[dark]{
   --ytn-fg:var(--yt-spec-text-primary,#fff);
@@ -1515,6 +1517,7 @@ html[dark]{
   --ytn-inv-bg:var(--yt-spec-inverted-background,#f1f1f1);
   --ytn-inv-fg:var(--yt-spec-text-primary-inverse,#0f0f0f);
   --ytn-danger:#ff6e66;
+  --ytn-tint:color-mix(in srgb,var(--ytn-accent) 11%,transparent);
 }
 html[data-ytn-motion="medium"]{--ytn-dy:-2px}
 html[data-ytn-motion="full"]{--ytn-t:260ms;--ytn-dy:-6px}
@@ -1524,6 +1527,7 @@ html[data-ytn-motion="off"]{--ytn-t:0ms}
 @keyframes ytn-bar{from{transform:scaleY(.15)}to{transform:none}}
 @keyframes ytn-shimmer{to{transform:translateX(100%)}}
 @keyframes ytn-page{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes ytn-pulse{50%{opacity:.3}}
 
 :is(.ytn-box,.ytn-toolbar,.ytn-overlay) button{font-family:inherit}
 .ytn-ico{flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -1531,7 +1535,8 @@ html[data-ytn-motion="off"]{--ytn-t:0ms}
 .ytn-range:focus-visible{outline:2px solid var(--ytn-accent);outline-offset:2px}
 
 /* ── 评论里的译文框 ── */
-.ytn-box{position:relative;box-sizing:border-box;max-width:100%;margin:8px 0 4px;color:var(--ytn-fg);font-family:inherit;font-size:var(--ytn-fs,14px);line-height:var(--ytn-lh,20px);font-weight:400}
+.ytn-box{position:relative;box-sizing:border-box;max-width:100%;margin:8px 0 4px;color:var(--ytn-fg);font-family:inherit;font-size:var(--ytn-fs,14px);line-height:var(--ytn-lh,20px);font-weight:400;transition:background-color var(--ytn-t),box-shadow var(--ytn-t),padding var(--ytn-t) var(--ytn-ease)}
+.ytn-box[data-state="error"]{--ytn-tint:color-mix(in srgb,var(--ytn-danger) 9%,transparent)}
 .ytn-box[data-state="idle"]{display:none}
 .ytn-box:not([data-state="idle"]){animation:ytn-in var(--ytn-t) var(--ytn-ease) both}
 .ytn-body-wrap{display:grid;grid-template-rows:1fr;transition:grid-template-rows var(--ytn-t) var(--ytn-ease)}
@@ -1550,33 +1555,37 @@ html[data-ytn-motion="off"]{--ytn-t:0ms}
 .ytn-skel-line:last-child:not(:first-child){width:58%}
 .ytn-skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0,color-mix(in srgb,var(--ytn-fg) 12%,transparent) 50%,transparent 100%);transform:translateX(-100%);animation:ytn-shimmer 1.4s linear infinite}
 
-.ytn-note{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-height:24px;margin-top:6px;font-size:12px;line-height:18px;color:var(--ytn-fg2)}
-.ytn-box[data-state="loading"] .ytn-note{visibility:hidden}
-.ytn-brand{display:inline-flex;align-items:center;gap:4px}
-.ytn-retry{display:none;align-items:center;gap:4px;height:24px;padding:0 10px 0 8px;border:0;border-radius:12px;background:color-mix(in srgb,var(--ytn-accent) 14%,transparent);color:var(--ytn-accent);font-size:12px;font-weight:500;cursor:pointer;transition:background-color var(--ytn-t)}
+.ytn-note{display:flex;align-items:center;gap:8px;min-height:24px;margin-bottom:6px;font-size:12px;line-height:18px;color:var(--ytn-fg2);transition:margin-bottom var(--ytn-t) var(--ytn-ease)}
+.ytn-box[data-view="original"][data-state="done"] .ytn-note{margin-bottom:0}
+.ytn-brand{display:inline-flex;align-items:center;gap:5px;color:var(--ytn-accent);font-weight:500}
+.ytn-box[data-state="loading"] .ytn-brand .ytn-ico{animation:ytn-pulse 1.1s ease-in-out infinite}
+.ytn-box[data-state="loading"] :is(.ytn-tabs,.ytn-copy){visibility:hidden}
+.ytn-box[data-state="error"] .ytn-brand{color:var(--ytn-fg2)}
+.ytn-box[data-state="error"] :is(.ytn-tabs,.ytn-copy){display:none}
+.ytn-box[data-view="original"][data-state="done"] :is(.ytn-brand,.ytn-copy){display:none}
+
+.ytn-retry{display:none;align-items:center;gap:4px;height:24px;margin-left:auto;padding:0 10px 0 8px;border:0;border-radius:12px;background:color-mix(in srgb,var(--ytn-accent) 14%,transparent);color:var(--ytn-accent);font-size:12px;font-weight:500;cursor:pointer;transition:background-color var(--ytn-t)}
 .ytn-retry:hover{background:color-mix(in srgb,var(--ytn-accent) 24%,transparent)}
 .ytn-box[data-state="error"] .ytn-retry{display:inline-flex}
-.ytn-box[data-state="error"] :is(.ytn-brand,.ytn-tabs,.ytn-copy){display:none}
-.ytn-box[data-view="original"] :is(.ytn-brand,.ytn-copy){display:none}
-.ytn-tabs{display:inline-flex;gap:2px;margin-left:2px;opacity:.72;transition:opacity var(--ytn-t)}
-.ytn-copy{display:inline-grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--ytn-fg2);cursor:pointer;opacity:.72;transition:opacity var(--ytn-t),background-color var(--ytn-t),color var(--ytn-t)}
+
+.ytn-tabs{display:inline-flex;margin-left:auto;padding:2px;border-radius:12px;background:color-mix(in srgb,var(--ytn-fg) 8%,transparent);opacity:.7;transition:opacity var(--ytn-t)}
+.ytn-box[data-view="original"][data-state="done"] .ytn-tabs{margin-left:0}
+.ytn-tab{height:20px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--ytn-fg2);font-size:12px;font-weight:500;line-height:20px;cursor:pointer;transition:background-color var(--ytn-t),color var(--ytn-t),box-shadow var(--ytn-t)}
+.ytn-tab:hover{color:var(--ytn-fg)}
+.ytn-tab.is-on{background:var(--ytn-surface);color:var(--ytn-fg);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.ytn-copy{display:inline-grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--ytn-fg2);cursor:pointer;opacity:.7;transition:opacity var(--ytn-t),background-color var(--ytn-t),color var(--ytn-t)}
 .ytn-box:hover :is(.ytn-tabs,.ytn-copy),.ytn-box:focus-within :is(.ytn-tabs,.ytn-copy){opacity:1}
 .ytn-copy:hover{background:var(--ytn-layer);color:var(--ytn-fg)}
 .ytn-copy.is-ok{color:var(--ytn-accent)}
-.ytn-tab{height:22px;padding:0 8px;border:0;border-radius:11px;background:transparent;color:var(--ytn-fg2);font-size:12px;font-weight:500;line-height:22px;cursor:pointer;transition:background-color var(--ytn-t),color var(--ytn-t)}
-.ytn-tab:hover{background:var(--ytn-chip);color:var(--ytn-fg)}
-.ytn-tab.is-on{background:var(--ytn-layer);color:var(--ytn-fg)}
 
 ytd-comment-view-model.ytn-hide-source #expander{display:none!important}
 html[data-ytn-hide-native] ytd-comments .translate-button{display:none!important}
 
 /* 三款外观 */
-html[data-ytn-style="quote"] .ytn-box{padding:2px 0 2px 14px}
-html[data-ytn-style="quote"] .ytn-box::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:3px;border-radius:3px;background:var(--ytn-accent);transform-origin:50% 0}
-html[data-ytn-motion="full"][data-ytn-style="quote"] .ytn-box:not([data-state="idle"])::before{animation:ytn-bar var(--ytn-t) var(--ytn-ease) both}
-html[data-ytn-style="card"] .ytn-box{padding:10px 14px;border-radius:12px;background:var(--ytn-chip)}
-html[data-ytn-style="minimal"] .ytn-box{padding:0 0 0 12px}
-html[data-ytn-style="minimal"] .ytn-box::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:2px;border-radius:2px;background:var(--ytn-fg2);opacity:.45}
+html[data-ytn-style="soft"] .ytn-box{padding:8px 10px 10px 12px;border-radius:12px;background:var(--ytn-tint)}
+html[data-ytn-style="outline"] .ytn-box{padding:8px 10px 10px 12px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--ytn-layer)}
+html[data-ytn-style="plain"] .ytn-box{padding:0}
+html:is([data-ytn-style="soft"],[data-ytn-style="outline"]) .ytn-box[data-view="original"][data-state="done"]{padding:0;background:transparent;box-shadow:none}
 
 /* ── 评论区工具栏 ── */
 .ytn-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 16px;color:var(--ytn-fg);font-family:Roboto,Arial,sans-serif;font-size:14px;line-height:20px}

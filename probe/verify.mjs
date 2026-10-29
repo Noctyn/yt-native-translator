@@ -155,7 +155,7 @@ const panel = await p1.evaluate(async () => {
   const overlay = document.querySelector('.ytn-overlay');
   if (!overlay) return { opened: false };
   const info = { opened: true, rows: overlay.querySelectorAll('.ytn-row').length, ptabs: [...overlay.querySelectorAll('.ytn-ptab')].map((t) => t.textContent), segs: overlay.querySelectorAll('.ytn-seg').length, switches: overlay.querySelectorAll('.ytn-switch').length, langOptions: overlay.querySelectorAll('.ytn-select option').length };
-  const seg = [...overlay.querySelectorAll('.ytn-seg')].find((s) => /色条引述/.test(s.textContent));
+  const seg = [...overlay.querySelectorAll('.ytn-seg')].find((s) => /柔和卡片|色条引述/.test(s.textContent));
   seg.querySelectorAll('.ytn-seg-btn')[1].click();
   info.styleAfterClick = document.documentElement.getAttribute('data-ytn-style');
   info.storedStyle = JSON.parse(localStorage.getItem('ytn_config_v1') || '{}').style;
