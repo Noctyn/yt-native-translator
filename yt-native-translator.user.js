@@ -569,7 +569,7 @@
   function st(vm) {
     let s = states.get(vm);
     if (!s) {
-      s = { sig: '', done: '', same: '', fail: '', queued: false, dist: Infinity, defers: 0, visible: false, dwell: 0, obsGen: -1, view: null };
+      s = { sig: '', done: '', same: '', fail: '', queued: false, dist: Infinity, defers: 0, visible: false, dwell: 0, obsGen: -1, view: null, trigger: 'manual' };
       states.set(vm, s);
     }
     return s;
@@ -670,6 +670,7 @@
     const body = h('div', { class: 'ytn-body' }, [
       h('div', { class: 'ytn-skel', 'aria-hidden': 'true' }),
       h('div', { class: 'ytn-text' }),
+      h('button', { class: 'ytn-more', type: 'button', text: '展开' }),
     ]);
     box.append(note, h('div', { class: 'ytn-body-wrap' }, body));
     return box;
@@ -736,14 +737,77 @@
     } catch (e) { /* ignore */ }
   }
 
-  function renderResult(vm, text, state) {
+  function isLongContent(vm, text) {
+    if (!text) return false;
+    const expander = vm ? vm.querySelector('#expander') : null;
+    const origCollapsed = !!(expander && (expander.hasAttribute('collapsed') || expander.querySelector('#more:not([hidden])')));
+    const lines = text.split('\n').length;
+    const chars = text.length;
+    return origCollapsed || lines >= 4 || chars >= 180;
+  }
+
+  function seekVideo(sec) {
+    const video = document.querySelector('video');
+    if (video) {
+      video.currentTime = sec;
+      try { video.play().catch(() => {}); } catch (e) {}
+    }
+    const mp = document.getElementById('movie_player');
+    if (mp && typeof mp.seekTo === 'function') {
+      try { mp.seekTo(sec, true); } catch (e) {}
+    }
+  }
+
+  function renderFormattedText(container, text) {
+    container.textContent = '';
+    const re = /\b(?:(\d{1,2}):)?([0-5]?\d):([0-5]\d)\b/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        container.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+      }
+      const rawTime = match[0];
+      const hours = match[1] ? Number(match[1]) : 0;
+      const minutes = Number(match[2]);
+      const seconds = Number(match[3]);
+      const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+      const btn = h('button', {
+        class: 'ytn-timestamp',
+        type: 'button',
+        'data-sec': String(totalSeconds),
+        title: '跳转至 ' + rawTime,
+        text: rawTime,
+      });
+      container.appendChild(btn);
+      lastIndex = match.index + rawTime.length;
+    }
+    if (lastIndex < text.length) {
+      container.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+  }
+
+  function renderResult(vm, text, state, isAuto) {
     const box = vm.querySelector('.ytn-box');
     if (!box) return;
     const prev = box.dataset.state;
     const target = box.querySelector('.ytn-text');
     target.textContent = '';
-    if (state === 'error') target.append(icon('alert', 16), h('span', { text: text || '' }));
-    else target.textContent = text || '';
+    const moreBtn = box.querySelector('.ytn-more');
+    if (state === 'error') {
+      target.append(icon('alert', 16), h('span', { text: text || '' }));
+      box.classList.remove('is-collapsible', 'is-collapsed');
+    } else {
+      renderFormattedText(target, text || '');
+      const isLong = isLongContent(vm, text);
+      if (isAuto && isLong) {
+        box.classList.add('is-collapsible', 'is-collapsed');
+        if (moreBtn) moreBtn.textContent = '展开';
+      } else {
+        box.classList.remove('is-collapsible', 'is-collapsed');
+      }
+    }
     box.__ytnOut = state === 'done' ? (text || '') : '';
     setState(box, state);
     if (state === 'done' && prev === 'loading') reveal(box);
@@ -819,9 +883,10 @@
     return Math.abs(r.top + r.height / 2 - innerHeight / 2);
   }
 
-  function enqueueVM(vm, dist) {
+  function enqueueVM(vm, dist, trigger) {
     if (!vm || !vm.isConnected) return;
     const s = st(vm);
+    if (trigger) s.trigger = trigger;
     if (s.queued) return;
     s.queued = true;
     s.dist = typeof dist === 'number' ? dist : measureDist(vm);
@@ -904,11 +969,14 @@
     s.done = sig;
     s.same = '';
     s.fail = '';
-    renderResult(vm, out, 'done');
+    const isAuto = !force && s.trigger === 'auto';
+    renderResult(vm, out, 'done', isAuto);
   }
 
-  async function runVM(vm, force) {
+  async function runVM(vm, force, trigger) {
     const s = st(vm);
+    if (trigger) s.trigger = trigger;
+    else if (force) s.trigger = 'manual';
     const srcNode = textNodeOf(vm);
     const text = commentText(vm);
     if (!srcNode || text.length < 2) return false;
@@ -970,7 +1038,7 @@
       }
       s.fail = sig;
       if (!vm.isConnected) return true;
-      renderResult(vm, friendlyError(err), 'error');
+      renderResult(vm, friendlyError(err), 'error', false);
       log('翻译失败', err && err.message === 'endpoint' ? 'HTTP ' + (err.status || '?') : (err && err.message) || err);
       return true;
     }
@@ -1005,7 +1073,7 @@
     const quick = config.hoverDelay <= 0 || modHeld(e);
     hoverTimer = setTimeout(() => {
       hoverTimer = 0;
-      if (vm.isConnected && hoverVM === vm) enqueueVM(vm);
+      if (vm.isConnected && hoverVM === vm) enqueueVM(vm, null, 'auto');
     }, quick ? 0 : config.hoverDelay);
   }
 
@@ -1035,7 +1103,7 @@
       if (isSettled(vm)) return;
       const r = vm.getBoundingClientRect();
       if (r.bottom < 0 || r.top > innerHeight) return;
-      enqueueVM(vm, Math.abs(r.top + r.height / 2 - innerHeight / 2));
+      enqueueVM(vm, Math.abs(r.top + r.height / 2 - innerHeight / 2), 'manual');
       n++;
     });
     toast(n ? '正在翻译 ' + n + ' 条评论' : '可视评论都已翻译');
@@ -1055,7 +1123,7 @@
     if (MOD_KEYS[e.code] && MOD_KEYS[e.code] === config.modifier && !e.repeat && hoverVM && config.hover && !isSettled(hoverVM)) {
       clearTimeout(hoverTimer);
       hoverTimer = 0;
-      enqueueVM(hoverVM);
+      enqueueVM(hoverVM, null, 'manual');
     }
     if (!e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey || isEditable(e.target)) return;
     const hit = SHORTCUTS.find((s) => s[0] === e.code);
@@ -1067,6 +1135,27 @@
   function onClick(e) {
     const t = e.target;
     if (!t || !t.closest) return;
+
+    const more = t.closest('.ytn-more');
+    if (more) {
+      e.preventDefault();
+      e.stopPropagation();
+      const box = more.closest('.ytn-box');
+      if (box) {
+        const collapsed = box.classList.toggle('is-collapsed');
+        more.textContent = collapsed ? '展开' : '收起';
+      }
+      return;
+    }
+
+    const ts = t.closest('.ytn-timestamp');
+    if (ts) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sec = Number(ts.dataset.sec);
+      if (isFinite(sec)) seekVideo(sec);
+      return;
+    }
 
     const ctl = t.closest('.ytn-tab, .ytn-retry, .ytn-copy');
     if (ctl) {
@@ -1084,12 +1173,23 @@
         if (vm) {
           const s = st(vm);
           s.done = s.same = s.fail = '';
-          runVM(vm, true);
+          runVM(vm, true, 'manual');
         }
       } else {
         copyOut(box, ctl);
       }
       return;
+    }
+
+    const ytMore = t.closest('#more, #expander button');
+    if (ytMore) {
+      const vm = commentVM(ytMore);
+      const box = vm && vm.querySelector('.ytn-box.is-collapsed');
+      if (box) {
+        box.classList.remove('is-collapsed');
+        const moreBtn = box.querySelector('.ytn-more');
+        if (moreBtn) moreBtn.textContent = '收起';
+      }
     }
 
     if (!config.takeoverNative) return;
@@ -1101,7 +1201,7 @@
     e.preventDefault();
     const s = st(vm);
     s.done = s.same = s.fail = '';
-    runVM(vm, true);
+    runVM(vm, true, 'manual');
   }
 
   /* 滚动自动翻译 */
@@ -1137,7 +1237,7 @@
       s.dwell = setTimeout(() => {
         s.dwell = 0;
         if (!config.autoTranslate || !vm.isConnected || !s.visible || isSettled(vm)) return;
-        enqueueVM(vm, s.dist);
+        enqueueVM(vm, s.dist, 'auto');
       }, AUTO_DWELL);
     }
   }
@@ -1543,7 +1643,7 @@ html[data-ytn-motion="off"]{--ytn-t:0ms}
 
 :is(.ytn-box,.ytn-toolbar,.ytn-overlay) button{font-family:inherit}
 .ytn-ico{flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-:is(.ytn-tab,.ytn-retry,.ytn-copy,.ytn-chip,.ytn-icon-btn,.ytn-seg-btn,.ytn-switch,.ytn-btn,.ytn-ptab,.ytn-select):focus-visible,
+:is(.ytn-tab,.ytn-retry,.ytn-copy,.ytn-chip,.ytn-icon-btn,.ytn-seg-btn,.ytn-switch,.ytn-btn,.ytn-ptab,.ytn-select,.ytn-more,.ytn-timestamp):focus-visible,
 .ytn-range:focus-visible{outline:2px solid var(--ytn-accent);outline-offset:2px}
 
 /* ── 评论里的译文框 ── */
@@ -1556,6 +1656,13 @@ html[data-ytn-motion="off"]{--ytn-t:0ms}
 .ytn-box[data-view="original"][data-state="done"] .ytn-body-wrap{grid-template-rows:0fr}
 .ytn-box[data-view="original"][data-state="done"] .ytn-body{visibility:hidden;transition:visibility 0s linear var(--ytn-t)}
 .ytn-text{white-space:pre-wrap;overflow-wrap:anywhere;color:inherit}
+.ytn-box.is-collapsed .ytn-text{max-height:calc(var(--ytn-lh,20px) * 3.6);overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 60%,transparent 100%);mask-image:linear-gradient(180deg,#000 60%,transparent 100%)}
+.ytn-more{display:none;margin-top:4px;padding:0;border:0;background:transparent;color:var(--ytn-fg2);font-family:inherit;font-size:13px;font-weight:500;line-height:18px;cursor:pointer;transition:color var(--ytn-t)}
+.ytn-more:hover{color:var(--ytn-fg)}
+.ytn-box.is-collapsible .ytn-more{display:inline-block}
+
+.ytn-timestamp{display:inline;margin:0;padding:0;border:0;border-radius:2px;background:transparent;color:var(--ytn-accent);font:inherit;line-height:inherit;cursor:pointer;text-decoration:none}
+.ytn-timestamp:hover{text-decoration:underline}
 .ytn-box[data-state="error"] .ytn-text{display:flex;align-items:flex-start;gap:6px;color:var(--ytn-danger)}
 .ytn-box[data-state="error"] .ytn-text .ytn-ico{margin-top:2px}
 
