@@ -607,10 +607,22 @@
     return !!(vm.closest('#replies') || vm.closest('ytd-comment-replies-renderer'));
   }
 
+  // 只压缩行内空白，保留换行与空行；<br> 也转成换行
   function commentText(vm) {
     const node = textNodeOf(vm);
     if (!node) return '';
-    return String(node.textContent || '').replace(/\s+/g, ' ').trim();
+    let raw = node.textContent || '';
+    if (node.querySelector('br')) {
+      const copy = node.cloneNode(true);
+      for (const br of copy.querySelectorAll('br')) br.replaceWith('\n');
+      raw = copy.textContent || '';
+    }
+    return raw
+      .replace(/\r\n?/g, '\n')
+      .replace(/[^\S\n]+/g, ' ')   // 行内连续空白 → 单个空格
+      .replace(/ ?\n ?/g, '\n')    // 去掉换行两侧多余空格
+      .replace(/\n{3,}/g, '\n\n')  // 最多保留一个空行
+      .trim();
   }
 
   let commentsEl = null;
@@ -924,7 +936,7 @@
     }
 
     const box = mountBox(vm, srcNode);
-    setSkeleton(box, clamp(Math.ceil(text.length / 56), 1, 3));
+    setSkeleton(box, clamp(Math.max(text.split('\n').length, Math.ceil(text.length / 56)), 1, 4));
     setState(box, 'loading');
     try {
       const out = await dedupe(key, () => translate(text, lang, id));
