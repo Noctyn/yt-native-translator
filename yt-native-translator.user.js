@@ -737,13 +737,19 @@
     } catch (e) { /* ignore */ }
   }
 
-  function isLongContent(vm, text) {
-    if (!text) return false;
-    const expander = vm ? vm.querySelector('#expander') : null;
-    const origCollapsed = !!(expander && (expander.hasAttribute('collapsed') || expander.querySelector('#more:not([hidden])')));
-    const lines = text.split('\n').length;
-    const chars = text.length;
-    return origCollapsed || lines >= 4 || chars >= 180;
+  function isOrigLong(vm) {
+    if (!vm) return false;
+    const more = vm.querySelector('#expander #more, #more');
+    if (more && !more.hasAttribute('hidden') && more.offsetParent !== null) {
+      return true;
+    }
+    const src = textNodeOf(vm);
+    if (src && src.scrollHeight > 90 && src.clientHeight > 0 && src.scrollHeight > src.clientHeight + 10) {
+      return true;
+    }
+    const raw = commentText(vm);
+    const lines = raw.split('\n').filter(Boolean).length;
+    return lines > 4 || raw.length > 280;
   }
 
   function seekVideo(sec) {
@@ -800,8 +806,8 @@
       box.classList.remove('is-collapsible', 'is-collapsed');
     } else {
       renderFormattedText(target, text || '');
-      const isLong = isLongContent(vm, text);
-      if (isAuto && isLong) {
+      const longOrig = isOrigLong(vm);
+      if (isAuto && longOrig) {
         box.classList.add('is-collapsible', 'is-collapsed');
         if (moreBtn) moreBtn.textContent = '展开';
       } else {
